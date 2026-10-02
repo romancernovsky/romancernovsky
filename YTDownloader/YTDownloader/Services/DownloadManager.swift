@@ -139,7 +139,7 @@ final class DownloadManager {
 
             switch plan {
             case .single(let stream, _):
-                let file = work.appendingPathComponent("single-\(stream.itag.itag).mp4")
+                let file = work.appendingPathComponent("single-\(Self.partKey(stream)).mp4")
                 let total = await ChunkedDownloader.shared.remoteSize(of: stream.url) ?? 0
                 update(id) { $0.status = .downloading; $0.totalBytes = total }
                 try await ChunkedDownloader.shared.download(stream.url, to: file) { [weak self] written, _ in
@@ -148,8 +148,8 @@ final class DownloadManager {
                 readyFile = file
 
             case .separate(let video, let audio, _):
-                let videoFile = work.appendingPathComponent("video-\(video.itag.itag).mp4")
-                let audioFile = work.appendingPathComponent("audio-\(audio.itag.itag).m4a")
+                let videoFile = work.appendingPathComponent("video-\(Self.partKey(video)).mp4")
+                let audioFile = work.appendingPathComponent("audio-\(Self.partKey(audio)).m4a")
                 async let videoSizeRequest = ChunkedDownloader.shared.remoteSize(of: video.url)
                 async let audioSizeRequest = ChunkedDownloader.shared.remoteSize(of: audio.url)
                 let videoSize = await videoSizeRequest ?? 0
@@ -221,6 +221,14 @@ final class DownloadManager {
     }
 
     // MARK: - Helpers
+
+    /// Identifies a YouTube format (its "itag", e.g. 137 = 1080p H.264) so a partial file
+    /// is only resumed with the same format on Retry.
+    private nonisolated static func partKey(_ stream: YTStream) -> String {
+        let itag = URLComponents(url: stream.url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "itag" })?.value
+        return itag ?? "\(stream.videoResolution ?? 0)"
+    }
 
     private func index(of id: UUID) -> Int? {
         items.firstIndex { $0.id == id }
