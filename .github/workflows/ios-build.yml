@@ -1,0 +1,32 @@
+name: iOS build
+
+on:
+  push:
+    paths:
+      - "YTDownloader/**"
+      - ".github/workflows/ios-build.yml"
+  pull_request:
+    paths:
+      - "YTDownloader/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build for iOS Simulator (no signing)
+        working-directory: YTDownloader
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project YTDownloader.xcodeproj \
+            -scheme YTDownloader \
+            -destination "generic/platform=iOS Simulator" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO | tee build.log | grep -E "error:|warning: .*YTDownloader/|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
