@@ -3,6 +3,7 @@ import CryptoKit
 import Foundation
 import Observation
 import Security
+import SwiftUI   // needed for WebAuthenticationSession (SwiftUI + AuthenticationServices)
 
 /// Official "Sign in with Google" for the YouTube Data API (OAuth 2.0 with PKCE).
 ///
