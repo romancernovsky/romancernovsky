@@ -11,6 +11,7 @@ A native iPhone app (SwiftUI) that downloads YouTube videos or whole playlists i
 | 3. Pick a resolution | You see every resolution found, for example "1080p · 12 of 15". You can untick individual videos. |
 | 4. Download | Videos download two at a time. Each one has its own progress bar showing %, MB and resolution. |
 | 5. Retry | If a video fails, tap **Retry** (or **Retry failed** for all of them). It continues from where it stopped. |
+| ★ Your playlists | Sign in with your YouTube (Google) account and pick from **your own playlists**, including private ones and *Liked videos*. |
 | 6. Play / Delete | Finished videos show a thumbnail. Tap to play, or swipe left (or use the ⋯ menu) to delete. |
 
 ### Where videos are saved
@@ -27,6 +28,8 @@ YTDownloader/
 │   ├── VideoInfo.swift              A video (id, title, thumbnail) and a resolution option
 │   └── DownloadItem.swift           One download: status, progress, file name (saved as JSON)
 ├── Services/
+│   ├── GoogleAuth.swift             Sign in with Google (OAuth 2.0 + PKCE), token kept in Keychain
+│   ├── YouTubeAPI.swift             Official YouTube Data API: your channel, playlists, playlist videos
 │   ├── YouTubeLink.swift            Understands all YouTube link formats
 │   ├── PlaylistFetcher.swift        Lists all videos in a playlist (YouTube's internal web API)
 │   ├── VideoInspector.swift         Finds the available resolutions (YouTubeKit library)
@@ -42,6 +45,31 @@ Background on the technical choices:
 - **Resolutions.** The app only offers H.264 video with AAC sound, the format iPhone plays natively and saves as a standard `.mp4`. YouTube usually provides this up to **1080p**. 1440p and 4K only come in VP9/AV1 formats, which can't be saved as a normal iPhone MP4 without re-encoding.
 - **Download in pieces.** YouTube slows down long single connections. Downloading in 10 MB pieces keeps it fast and lets Retry resume instead of starting over.
 - **Extraction.** Stream addresses come from the open-source [YouTubeKit](https://github.com/alexeichhorn/YouTubeKit) library. If YouTube changes its internal API, YouTubeKit falls back to its maintainer's remote helper service. When that happens, update the package in Xcode (*File › Packages › Update to Latest Package Versions*).
+
+## Signing in to YouTube (optional, one-time setup)
+
+Signing in lets the app list **your own playlists**, including private ones and *Liked videos*. It uses Google's official sign-in: Google's own page opens in a secure browser sheet, and the app never sees your password. It only asks for **read-only** access to YouTube.
+
+Google requires every app that uses sign-in to have its own free "client ID". You create it once, in about 10 minutes:
+
+1. Go to **https://console.cloud.google.com** and sign in with the Google account that owns your YouTube channel. Create a new project, e.g. "YT Downloader".
+2. **APIs & Services › Library**: search for **YouTube Data API v3** and click **Enable**.
+3. **Google Auth Platform** (called "OAuth consent screen" in older menus):
+   - **Branding**: app name "YT Downloader", your e-mail as support and developer contact.
+   - **Audience**: user type **External**. Under **Test users**, add your own Gmail address.
+   - **Data access**: add the scope `.../auth/youtube.readonly`.
+4. **Clients › Create client**: application type **iOS**. Bundle ID: exactly the bundle identifier you set in Xcode, e.g. `com.yourname.ytdownloader`. Click **Create** and copy the **Client ID** (it ends with `.apps.googleusercontent.com`).
+5. In the app, open **Settings ⚙︎ › YouTube account**, paste the client ID, and tap **Sign in to YouTube**.
+   Google shows *"Google hasn't verified this app"*. That's expected for a private app; tap **Continue**.
+6. Back on the **Download** tab, tap **Download from my playlists**.
+
+Tip: to avoid typing the ID on the phone, paste it into `builtInClientID` in `Services/GoogleAuth.swift` before building.
+
+Good to know:
+- While the Google project is in *Testing* mode, Google asks you to sign in again every 7 days. To avoid that, click **Publish app** under *Audience*. It stays private as long as you don't share the client ID.
+- Signing in is only used to **list** playlists. The videos are fetched the same way as without signing in, so **private videos can't be downloaded**. Public and unlisted videos in your playlists work.
+- When you paste a link to a private playlist while signed in, the app reads it through your account automatically.
+- The free YouTube API allowance (10,000 units a day) covers roughly 5,000 playlist pages a day, far more than personal use needs.
 
 ## Running it on your iPhone
 
@@ -63,7 +91,7 @@ Each push runs `.github/workflows/ios-build.yml` on a GitHub macOS machine, whic
 
 ## Known limitations
 - **Keep the app open while downloading.** iOS stops ordinary apps from working in the background after about 30 seconds. Downloads that were interrupted resume automatically when you reopen the app.
-- **Videos it can't download:** age-restricted, members-only, private and live videos.
+- **Videos it can't download:** age-restricted, members-only, private and live videos. This is still true after signing in.
 - **No App Store release.** Apple doesn't allow YouTube downloaders in the App Store, so this app is for personal installation through Xcode only.
 
 ## Legal note

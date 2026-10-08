@@ -74,13 +74,42 @@ final class NewDownloadModel {
         lookupTask = Task { await lookup() }
     }
 
+    /// Loads one of the signed-in user's own playlists (picked from "My playlists").
+    func startLookup(ownPlaylist playlist: YouTubeAPI.Playlist) {
+        lookupTask?.cancel()
+        link = "https://www.youtube.com/playlist?list=\(playlist.id)"
+        lookupTask = Task {
+            clearResults()
+            isPlaylist = true
+            phase = .working("Reading “\(playlist.title)”…")
+            do {
+                let videos = try await YouTubeAPI().playlistVideos(playlistID: playlist.id)
+                if Task.isCancelled { return }
+                guard !videos.isEmpty else {
+                    phase = .failed("This playlist has no downloadable videos.")
+                    return
+                }
+                collectionTitle = playlist.title
+                rows = videos.map { Row(video: $0) }
+            } catch {
+                if !Task.isCancelled { phase = .failed(error.localizedDescription) }
+                return
+            }
+            await finishLookup()
+        }
+    }
+
     // MARK: - Lookup
 
-    private func lookup() async {
+    private func clearResults() {
         rows = []
         options = []
         selectedHeight = nil
         collectionTitle = nil
+    }
+
+    private func lookup() async {
+        clearResults()
 
         guard let parsed = YouTubeLink.parse(link) else {
             phase = .failed("This doesn't look like a YouTube video or playlist link.")
@@ -102,6 +131,13 @@ final class NewDownloadModel {
                 rows = result.videos.map { Row(video: $0) }
             } catch {
                 if Task.isCancelled { return }
+                // A private playlist can only be read with the owner's permission.
+                if GoogleAuth.shared.isSignedIn,
+                   let videos = try? await YouTubeAPI().playlistVideos(playlistID: id), !videos.isEmpty {
+                    rows = videos.map { Row(video: $0) }
+                    await finishLookup()
+                    return
+                }
                 // Could not read the playlist – fall back to the single video in the link, if any.
                 if let startVideoID {
                     isPlaylist = false
@@ -113,7 +149,11 @@ final class NewDownloadModel {
             }
         }
 
-        // 2) Which resolutions does each video have?
+        await finishLookup()
+    }
+
+    /// Step 2: which resolutions does each video have?
+    private func finishLookup() async {
         await checkResolutions()
         if Task.isCancelled { return }
 

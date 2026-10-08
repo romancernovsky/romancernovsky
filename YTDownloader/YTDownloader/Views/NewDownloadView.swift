@@ -9,6 +9,7 @@ struct NewDownloadView: View {
 
     @State private var model = NewDownloadModel()
     @State private var showSettings = false
+    @State private var showMyPlaylists = false
     @FocusState private var linkFocused: Bool
 
     private var storage: StorageManager { StorageManager.shared }
@@ -17,6 +18,7 @@ struct NewDownloadView: View {
         NavigationStack {
             Form {
                 linkSection
+                accountSection
 
                 switch model.phase {
                 case .idle:
@@ -57,6 +59,9 @@ struct NewDownloadView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showMyPlaylists) {
+                MyPlaylistsView { playlist in model.startLookup(ownPlaylist: playlist) }
+            }
         }
     }
 
@@ -98,6 +103,33 @@ struct NewDownloadView: View {
             Text("YouTube link")
         } footer: {
             Text("Paste a link to a single video or to a playlist.")
+        }
+    }
+
+    private var accountSection: some View {
+        Section {
+            if GoogleAuth.shared.isSignedIn {
+                AccountBadge()
+                Button {
+                    linkFocused = false
+                    showMyPlaylists = true
+                } label: {
+                    Label("Download from my playlists", systemImage: "list.bullet.rectangle.portrait")
+                }
+                .disabled(isWorking)
+            } else if GoogleAuth.shared.isConfigured {
+                SignInButton()
+            } else {
+                Button { showSettings = true } label: {
+                    Label("Set up YouTube sign-in…", systemImage: "person.crop.circle.badge.questionmark")
+                }
+            }
+        } header: {
+            Text("Your YouTube")
+        } footer: {
+            if !GoogleAuth.shared.isSignedIn {
+                Text("Sign in to pick from your own playlists, including private ones and Liked videos.")
+            }
         }
     }
 
